@@ -3,6 +3,10 @@
 #include <crypt.h>
 #include <pthread.h>
 
+struct threadInfo{ //TODO:add more relevant info to this
+    int startIncl;
+    
+}
 char validChars[62] = { '0','1','2','3','4','5',
                         '6','7','8','9','A','B',
                         'C','D','E','F','G',
@@ -25,7 +29,7 @@ char* getSalt( char *cryptPasswd){
     return extractedSalt;
 }
 
-void* crackRange( void* pointer){
+void crackRange( int startIncl, int endExcl, char* salt ){ //TODO: use these variables
     for( int index1=0; index1 < 62; index1++){
         for( int index2=0; index2<62; index2++){
             for( int index3=0; index3<62; index3++){
@@ -34,8 +38,12 @@ void* crackRange( void* pointer){
             }
         }
     }
+}
+
+void* threadBegins( void* identity){//TODO: think about merging it with crackRange (given we have the info packet)
+    int* threadIdent = (int*)identity;
+    crackRange(0,62,salt);
     return NULL;
-    
 }
 
 /*
@@ -47,11 +55,14 @@ void crackSingle(char *username, char *cryptPasswd, int pwlen, char *passwd) {
     char* salt = getSalt(cryptPasswd);
     printf("SALT=[%s]\n", salt);
     
-    char* testCrypt;
-    testCrypt = crypt( "joseph", salt );
-    printf("TEST CRYPT= [%s]\n (testing array...[%c])\n", testCrypt, validChars[61]);
+    //char* testCrypt;
+    //testCrypt = crypt( "joseph", salt );
+    //printf("TEST CRYPT= [%s]\n (testing array...[%c])\n", testCrypt, validChars[61]);
+    
+    //TODO: Create more threads with a thread packet for each one
     pthread_t thread0;
-    pthread_create( &thread0, NULL, crackRange, NULL);
+    int tIdent = 1;
+    pthread_create( &thread0, NULL, threadBegins, &tIdent);
     printf( "one path\n");
 }
 
