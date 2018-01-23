@@ -5,25 +5,31 @@
 #include <pthread.h>
 #include <string.h>
 
-struct threadInfo{ //TODO:add more relevant info to this, use for sneaky thread
+//I used man pthread_create's example as a base for this struct
+struct threadInfo{ 
+    pthread_t thread_id;
+    int thread_num; 
     char *username; 
-    char *cryptPasswd; 
+    char *cryptPasswd;
+    char* salt;
     int pwlen; 
     char *passwd; 
+    int startIncl;
+    int endIncl;
     int maxCpu;
 };
-char validChars[62] = { '0','1','2','3','4','5',
-                        '6','7','8','9','A','B',
-                        'C','D','E','F','G',
-                        'H','I','J','K','L',
-                        'M','N','O','P','Q',
-                        'R','S','T','U','V',
-                        'W','X','Y','Z','a',
-                        'b','c','d','e','f',
-                        'g','h','i','j','k',
-                        'l','m','n','o','p',
-                        'q','r','s','t','u',
-                        'v','w','x','y','z'};
+char validChars[62] = { '0','1','2','3','4','5', //0-5 [0]
+                        '6','7','8','9','A','B', //6-11[1]
+                        'C','D','E','F','G', //12-16 [2]
+                        'H','I','J','K','L', //17-21 [3]
+                        'M','N','O','P','Q', //22-26 [4]
+                        'R','S','T','U','V', //27-31 [5]
+                        'W','X','Y','Z','a', //32-36 [6]
+                        'b','c','d','e','f', //37-41 [7]
+                        'g','h','i','j','k', //42-46 [8]
+                        'l','m','n','o','p', //47-51 [9]
+                        'q','r','s','t','u', //52-56 [10]
+                        'v','w','x','y','z'};//57-61 [11]
 
 char* crackedPassword=NULL;
     
@@ -35,28 +41,49 @@ char* getSalt( char *cryptPasswd){
     return extractedSalt;
 }
 
-//this function was going to be used for the multithreading solution.
-void crackRange( int startIncl, int endExcl, char* salt ){ //TODO: use these variables
-    for( int index1=0; index1 < 62; index1++){
+void* threadBegins( void* threadArgs){
+    struct threadInfo *tinfo = threadArgs;
+    struct crypt_data data;
+    data.initialized=0;
+    char* passAttempt= malloc( 4 * sizeof(char)); //what will be encrypted
+    char* passAttemptResult;// = malloc( 4 * sizeof(char)); //result of encrypting passAttempt
+    //printf( "X\n");
+    int startRange = tinfo->startIncl;
+    int endRange = tinfo->endIncl;
+    //printf( "Y\n");
+    char* salt = tinfo->salt;
+    //printf( "Z\n");
+    //printf("salt is [%s]\n", salt );
+    printf( "Some thread started looking between [%d] and [%d] (salt: %s)\n", startRange, endRange, salt);
+    for( int index1 = startRange; index1 <= endRange; index1++){
+        passAttempt[0] = validChars[index1];
+        printf( "Looking at [%c]\n", validChars[index1]);
         for( int index2=0; index2<62; index2++){
+            passAttempt[1] = validChars[index2];
             for( int index3=0; index3<62; index3++){
-                printf("[[%s]]\n", crypt( "joseph", "jc" ));
-                for( int index4=0; index4<62; index4++){}
+                passAttempt[2] = validChars[index3];
+                for( int index4=0; index4<62; index4++){
+                    passAttempt[3] = validChars[index4];
+                    //printf( "%d:%s \n", index4, passAttempt);
+                    passAttemptResult= crypt_r( passAttempt, salt, &data);
+                    //printf( "AfterCrypt\n");
+                    if( strcmp( passAttemptResult, tinfo->cryptPasswd) == 0){
+                        //printf( "G\n");
+                        printf( "<<<<<<<<<<<<<<<<<<<<<<<Found [%s]\n", passAttemptResult);
+                        return passAttempt;
+                    }
+                }
             }
         }
     }
-}
-
-void* threadBegins( void* identity){//TODO: think about merging it with crackRange (given we have the info packet)
-    //int* threadIdent = (int*)identity;
-    //crackRange(0,62,salt);
+    printf( "Some thread finished\n");
     return NULL;
 }
 
 char* getCrackin( char* cryptPasswd, char* salt, int depth){
     struct crypt_data data;
     data.initialized=0;
-    char* passAttempt= malloc( depth * sizeof(char)); //what will be encrypted
+    char* passAttempt= malloc( 4 * sizeof(char)); //what will be encrypted
     char* passAttemptResult = malloc( 4 * sizeof(char)); //result of encrypting passAttempt
     //printf( "depth was %d\t", depth);
     for( int index1=0; index1 < 62; index1++){
@@ -86,7 +113,37 @@ char* getCrackin( char* cryptPasswd, char* salt, int depth){
  */
 void crackSingle(char *username, char *cryptPasswd, int pwlen, char *passwd) { 
     //printf("\n[%s]  [%s]  [%d]  [%s]\n", username, cryptPasswd, pwlen, passwd);
+    struct threadInfo* threads = calloc( 12, sizeof( struct threadInfo) );
+    int startIncl=0;
+    int endIncl=5;
+    int addThis=6;
     char* salt = getSalt(cryptPasswd);
+    for(int index = 0; index < 12; index++){
+        //threads[index] = calloc( 1, sizeof( struct threadInfo));
+        threads[index].cryptPasswd = cryptPasswd;
+        threads[index].salt = salt;
+        threads[index].startIncl = startIncl;
+        threads[index].endIncl = endIncl;
+        threads[index].passwd = passwd;
+        if(index == 1){ addThis = 5;startIncl++;}
+        startIncl+=addThis;
+        endIncl+=addThis;
+        pthread_create( &threads[index].thread_id, NULL, threadBegins, &threads[index]);
+    }
+    //struct threadInfo *tinfo;
+    //tinfo = calloc( 1, sizeof( struct threadInfo));
+    //pthread_t thread0;
+    
+    //char* salt = getSalt(cryptPasswd);
+    
+    /*tinfo->cryptPasswd = cryptPasswd;
+    tinfo->salt = salt;
+    tinfo->pwlen = pwlen;
+    tinfo->passwd = passwd;
+    tinfo->startIncl = 0;
+    tinfo->endExcl = 62;*/
+    //printf( "A\n");
+    //pthread_create( &thread0, NULL, threadBegins, &tinfo);
     //printf("SALT=[%s]\n", salt);
     
     //char* testCrypt;
@@ -97,13 +154,25 @@ void crackSingle(char *username, char *cryptPasswd, int pwlen, char *passwd) {
     //pthread_t thread0;
     //int tIdent = 1;
     //pthread_create( &thread0, NULL, threadBegins, &tIdent);
-    //printf( "one path\n"); 
-    char* crackRes= getCrackin( cryptPasswd, salt, pwlen);
-    strcpy( passwd, crackRes);
+    //printf( "one path\n");
+    //printf( "B\n");
+    void * crackRes;
+    //char* crackRes= getCrackin( cryptPasswd, salt, pwlen);
+    printf( "ABOUT TO WAIT\n");
+    
+    for( int index = 0; index < 12; index++){
+        pthread_join( threads[index].thread_id, &crackRes );
+        if( crackRes != NULL ){strcpy( passwd, (char*) crackRes);}
+    }
+    printf( "FINISHED WAITING\n");
+    //printf( "C\n");
+    ///////////////strcpy( passwd, (char*) crackRes);
+    //printf( "D\n");
     //passwd = crackRes;
     printf( "The password is %s\n", passwd);
-    free(salt);
+    //free(salt);
     free(crackRes);
+    //free(tinfo);
 }
 
 char* findEncrypted( char* bufContents){
