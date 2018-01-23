@@ -1,12 +1,16 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <crypt.h>
 #include <pthread.h>
 #include <string.h>
 
-struct threadInfo{ //TODO:add more relevant info to this
-    int startIncl;
-    
+struct threadInfo{ //TODO:add more relevant info to this, use for sneaky thread
+    char *username; 
+    char *cryptPasswd; 
+    int pwlen; 
+    char *passwd; 
+    int maxCpu;
 };
 char validChars[62] = { '0','1','2','3','4','5',
                         '6','7','8','9','A','B',
@@ -23,6 +27,7 @@ char validChars[62] = { '0','1','2','3','4','5',
 
 char* crackedPassword=NULL;
     
+/*gets salt from the first 2 chars of encrypted result*/
 char* getSalt( char *cryptPasswd){
     char* extractedSalt = malloc( sizeof(char)*2); //possible memory leaks...
     extractedSalt[0] = cryptPasswd[0];
@@ -30,6 +35,7 @@ char* getSalt( char *cryptPasswd){
     return extractedSalt;
 }
 
+//this function was going to be used for the multithreading solution.
 void crackRange( int startIncl, int endExcl, char* salt ){ //TODO: use these variables
     for( int index1=0; index1 < 62; index1++){
         for( int index2=0; index2<62; index2++){
@@ -48,31 +54,26 @@ void* threadBegins( void* identity){//TODO: think about merging it with crackRan
 }
 
 char* getCrackin( char* cryptPasswd, char* salt, int depth){
-    char* passAttempt= malloc( depth * sizeof(char));
-    char* passAttemptResult = malloc( 4 * sizeof(char));
-    printf( "depth was %d", depth);
+    struct crypt_data data;
+    data.initialized=0;
+    char* passAttempt= malloc( depth * sizeof(char)); //what will be encrypted
+    char* passAttemptResult = malloc( 4 * sizeof(char)); //result of encrypting passAttempt
+    //printf( "depth was %d\t", depth);
     for( int index1=0; index1 < 62; index1++){
         passAttempt[0] = validChars[index1];
-        for( int index2=0; /*depth>1 &&*/ index2<62; index2++){
+        for( int index2=0; index2<62; index2++){
             passAttempt[1] = validChars[index2];
-            for( int index3=0; /*depth>2 && */index3<62; index3++){
+            for( int index3=0; index3<62; index3++){
                 passAttempt[2] = validChars[index3];
                 //printf("[[%s]]\n", crypt( ", salt ));
                 for( int index4=0; /*depth>3 &&*/index4<62; index4++){
                     passAttempt[3] = validChars[index4];
-                    passAttemptResult= crypt( passAttempt, salt);
+                    passAttemptResult= crypt_r( passAttempt, salt, &data);
                     if( strcmp( passAttemptResult, cryptPasswd) == 0){
                         printf( "Found [%s]\n", passAttemptResult);
                         return passAttempt;
                     }
                 }
-                /*if( depth ==3){
-                    passAttemptResult= crypt( passAttempt, salt);
-                    if( strcmp( passAttemptResult, cryptPasswd) == 0){
-                        printf( "Found [%s]\n", passAttemptResult);
-                        return passAttempt;
-                    }
-                }*/
             }
         }
     }
@@ -84,9 +85,9 @@ char* getCrackin( char* cryptPasswd, char* salt, int depth){
  * given the encrypted password CRYPTPASSWD.
  */
 void crackSingle(char *username, char *cryptPasswd, int pwlen, char *passwd) { 
-    printf("\n[%s]  [%s]  [%d]  [%s]\n", username, cryptPasswd, pwlen, passwd);
+    //printf("\n[%s]  [%s]  [%d]  [%s]\n", username, cryptPasswd, pwlen, passwd);
     char* salt = getSalt(cryptPasswd);
-    printf("SALT=[%s]\n", salt);
+    //printf("SALT=[%s]\n", salt);
     
     //char* testCrypt;
     //testCrypt = crypt( "joseph", salt );
@@ -154,4 +155,7 @@ void crackSpeedy(char *fname, int pwlen, char **passwds) {
  * given the encrypted password CRYPTPASSWD withoiut using more than MAXCPU
  * percent of any processor.
  */
-void crackStealthy(char *username, char *cryptPasswd, int pwlen, char *passwd, int maxCpu) { }
+void crackStealthy(char *username, char *cryptPasswd, int pwlen, char *passwd, int maxCpu) { 
+    crackSingle( "dc", cryptPasswd, pwlen, passwd);
+    //need to use a thread with limited resource
+}
